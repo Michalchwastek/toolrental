@@ -1,12 +1,21 @@
 <?php
 
-// Te require_once zakładają, że SRC_PATH zostało poprawnie zdefiniowane
-// w public/index.php i jest dostępne globalnie.
+// Upewnij się, że SRC_PATH jest zdefiniowane w public/index.php przed dołączeniem tego pliku
+if (!defined('SRC_PATH')) {
+    // Definicja awaryjna - niezalecane w produkcji, lepiej zapewnić definicję w punkcie wejścia
+    define('SRC_PATH', dirname(__DIR__)); 
+}
+if (!defined('VIEWS_PATH')) {
+    // Definicja awaryjna
+    define('VIEWS_PATH', dirname(dirname(__DIR__)) . '/views');
+}
+
+
 require_once SRC_PATH . '/Core/Database.php';
 require_once SRC_PATH . '/Models/Tool.php';
-require_once SRC_PATH . '/Models/Category.php';
+require_once SRC_PATH . '/Models/Category.php'; // Potrzebne do pobrania listy kategorii dla formularzy
 
-class ToolController { // Ta linia powinna być znacznie wcześniej niż linia 20
+class ToolController {
     private $db;
     private $toolModel;
     private $categoryModel;
@@ -14,21 +23,24 @@ class ToolController { // Ta linia powinna być znacznie wcześniej niż linia 2
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
         $this->toolModel = new Tool($this->db);
-        $this->categoryModel = new Category($this->db);
+        $this->categoryModel = new Category($this->db); // Inicjalizujemy model kategorii
     }
 
+    // Wyświetl listę wszystkich narzędzi (dla admina)
     public function index() {
         $tools = $this->toolModel->getAll();
         include VIEWS_PATH . '/tools/index.php';
     }
 
+    // Wyświetl formularz dodawania nowego narzędzia (dla admina)
     public function createForm() {
-        $categories = $this->categoryModel->getAll();
-        $errors = $GLOBALS['errors'] ?? []; // Dla wyświetlenia błędów, jeśli są
-        $input = $GLOBALS['input'] ?? [];   // Dla zachowania wartości pól
+        $categories = $this->categoryModel->getAll(); 
+        $errors = $GLOBALS['errors'] ?? []; 
+        $input = $GLOBALS['input'] ?? [];   
         include VIEWS_PATH . '/tools/create.php';
     }
 
+    // Przetwórz dane z formularza dodawania narzędzia (dla admina)
     public function store() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $input = [
@@ -64,28 +76,27 @@ class ToolController { // Ta linia powinna być znacznie wcześniej niż linia 2
                     $errors[] = "Nie udało się dodać narzędzia. Spróbuj ponownie.";
                 }
             }
-            // Jeśli błędy, przekaż je i dane wejściowe z powrotem do formularza
             $GLOBALS['errors'] = $errors;
-            $GLOBALS['input'] = $input; // Przekaż $input do widoku createForm
-            $this->createForm(); // Wywołaj metodę, która dołączy widok z błędami
+            $GLOBALS['input'] = $input; 
+            $this->createForm(); 
         } else {
             header('Location: index.php?action=tool_create_form');
             exit;
         }
     }
 
+    // Wyświetl formularz edycji narzędzia (dla admina)
     public function editForm() {
         $id_narzedzia = (int)($_GET['id'] ?? 0);
         if ($id_narzedzia <= 0) {
             echo "Nieprawidłowe ID narzędzia."; return;
         }
         
-        // Jeśli są błędy z poprzedniej próby update, użyj danych z $GLOBALS
         $errors = $GLOBALS['errors'] ?? [];
-        $tool_data_from_post = $GLOBALS['input'] ?? null;
+        $input_data = $GLOBALS['input'] ?? null; // Zmieniono nazwę zmiennej dla jasności
 
-        if ($tool_data_from_post && isset($tool_data_from_post['id_narzedzia']) && $tool_data_from_post['id_narzedzia'] == $id_narzedzia) {
-            $tool = $tool_data_from_post; // Użyj danych z POST, jeśli to ta sama edycja z błędami
+        if ($input_data && isset($input_data['id_narzedzia']) && $input_data['id_narzedzia'] == $id_narzedzia) {
+            $tool = $input_data; 
         } else {
             $tool = $this->toolModel->getById($id_narzedzia);
         }
@@ -93,15 +104,16 @@ class ToolController { // Ta linia powinna być znacznie wcześniej niż linia 2
         if (!$tool) {
             echo "Narzędzie nie znalezione."; return;
         }
-        $categories = $this->categoryModel->getAll();
+        $categories = $this->categoryModel->getAll(); 
         include VIEWS_PATH . '/tools/edit.php';
     }
 
+    // Przetwórz dane z formularza edycji narzędzia (dla admina)
     public function update() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id_narzedzia = (int)($_POST['id_narzedzia'] ?? 0);
             $input = [
-                'id_narzedzia' => $id_narzedzia, // Ważne dla przekazania z powrotem do formularza
+                'id_narzedzia' => $id_narzedzia,
                 'nazwa_narzedzia' => trim($_POST['nazwa_narzedzia'] ?? ''),
                 'opis_narzedzia' => trim($_POST['opis_narzedzia'] ?? null),
                 'id_kategorii' => (int)($_POST['id_kategorii'] ?? 0),
@@ -136,16 +148,16 @@ class ToolController { // Ta linia powinna być znacznie wcześniej niż linia 2
                     $errors[] = "Nie udało się zaktualizować narzędzia.";
                 }
             }
-            // Jeśli błędy, przekaż je i dane wejściowe z powrotem do formularza edycji
             $GLOBALS['errors'] = $errors;
-            $GLOBALS['input'] = $input; // Przekaż $input do widoku editForm
-            $this->editForm(); // Wywołaj metodę, która dołączy widok z błędami
+            $GLOBALS['input'] = $input; 
+            $this->editForm(); 
         } else {
             header('Location: index.php?action=tools_list');
             exit;
         }
     }
 
+    // Usuń narzędzie (dla admina)
     public function delete() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id_narzedzia = (int)($_POST['id_narzedzia'] ?? 0);
@@ -161,6 +173,35 @@ class ToolController { // Ta linia powinna być znacznie wcześniej niż linia 2
         }
         header('Location: index.php?action=tools_list');
         exit;
+    }
+
+    // NOWA METODA: Publiczna lista narzędzi
+    public function publicList() {
+        $tools = $this->toolModel->getAll(); 
+        // W przyszłości można dodać filtrowanie, np. tylko dostępne:
+        // $tools = array_filter($tools, function($tool) { return $tool['dostepnosc'] == true; });
+        include VIEWS_PATH . '/public_tools/list.php';
+    }
+
+    // NOWA METODA: Widok szczegółów narzędzia (publiczny)
+    public function showToolDetails() {
+        $id_narzedzia = (int)($_GET['id'] ?? 0);
+        if ($id_narzedzia <= 0) {
+            // Lepsza obsługa błędu
+            http_response_code(400); // Bad Request
+            echo "<h1>Błąd 400: Nieprawidłowe żądanie</h1><p>Nie podano poprawnego ID narzędzia.</p>";
+            echo '<p><a href="index.php?action=tools_public_list">Powrót do listy narzędzi</a></p>';
+            return;
+        }
+        $tool = $this->toolModel->getById($id_narzedzia);
+        if (!$tool) {
+            http_response_code(404); // Not Found
+            echo "<h1>Błąd 404: Narzędzie nie znalezione</h1><p>Przepraszamy, narzędzie o podanym ID nie istnieje.</p>";
+            echo '<p><a href="index.php?action=tools_public_list">Powrót do listy narzędzi</a></p>';
+            return;
+        }
+        // Ten widok stworzymy w następnym kroku: views/public_tools/details.php
+        include VIEWS_PATH . '/public_tools/details.php';
     }
 }
 ?>
