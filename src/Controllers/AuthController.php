@@ -1,24 +1,23 @@
 <?php
 
-// Wymagane klasy - w przyszłości autoloader
-// Upewnij się, że stała SRC_PATH jest zdefiniowana w public/index.php przed dołączeniem tego pliku
+// Upewnij się, że stałe ścieżek są zdefiniowane w public/index.php przed dołączeniem tego pliku
 if (!defined('SRC_PATH')) {
-    // Definicja awaryjna, jeśli plik jest wywoływany w innym kontekście,
-    // ale najlepiej, aby SRC_PATH było zdefiniowane globalnie przez index.php
-    define('SRC_PATH', dirname(__DIR__)); // Zakłada, że Controllers jest w src/, a src/ jest o jeden poziom wyżej
+    // Definicja awaryjna - niezalecane w produkcji
+    define('SRC_PATH', dirname(__DIR__)); 
 }
 
 require_once SRC_PATH . '/Core/Database.php';
 require_once SRC_PATH . '/Models/User.php';
 
 class AuthController {
-    
+
     private $db;
 
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
     }
 
+    // ... (istniejące metody: showRegistrationForm, processRegistration, showLoginForm, processLogin, logout, checkAdmin) ...
     public function showRegistrationForm() {
         $errors = $GLOBALS['errors'] ?? []; 
         $input = $GLOBALS['input'] ?? [];
@@ -41,19 +40,26 @@ class AuthController {
             $haslo_confirm = $_POST['haslo_confirm'] ?? '';
 
             if (empty($imie)) $errors[] = "Imię jest wymagane.";
+            // ... (reszta walidacji z poprzedniej wersji) ...
             if (empty($nazwisko)) $errors[] = "Nazwisko jest wymagane.";
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $errors[] = "Niepoprawny format email.";
             if (empty($haslo)) $errors[] = "Hasło jest wymagane.";
             if (strlen($haslo) < 6) $errors[] = "Hasło musi mieć co najmniej 6 znaków.";
             if ($haslo !== $haslo_confirm) $errors[] = "Hasła nie są takie same.";
 
+
             if (empty($errors)) {
                 $user = new User($this->db);
-                if ($user->create($imie, $nazwisko, $email, $haslo)) {
-                    header('Location: index.php?action=login&status=registered');
-                    exit;
+                // Dodatkowe sprawdzenie dostępności emaila przed próbą utworzenia
+                if ($user->findByEmail($email)) {
+                    $errors[] = "Ten adres email jest już zajęty.";
                 } else {
-                    $errors[] = "Nie udało się zarejestrować użytkownika. Możliwe, że email jest już zajęty.";
+                    if ($user->create($imie, $nazwisko, $email, $haslo)) {
+                        header('Location: index.php?action=login&status=registered');
+                        exit;
+                    } else {
+                        $errors[] = "Nie udało się zarejestrować użytkownika. Spróbuj ponownie.";
+                    }
                 }
             }
         }
@@ -70,11 +76,12 @@ class AuthController {
         if (isset($_GET['status']) && $_GET['status'] === 'registered') {
             $success_message = "Rejestracja zakończona pomyślnie! Możesz się teraz zalogować.";
         }
-        
+
         include VIEWS_PATH . '/auth/login.php';
     }
 
     public function processLogin() {
+        // ... (kod metody bez zmian) ...
         $errors = [];
         $email_value = trim($_POST['email'] ?? ''); 
 
@@ -98,7 +105,7 @@ class AuthController {
                     $_SESSION['user_email'] = $loggedInUser['email'];
                     $_SESSION['user_role'] = $loggedInUser['rola'];
                     $_SESSION['user_imie'] = $loggedInUser['imie'];
-                    
+
                     header('Location: index.php?action=home&status=loggedin');
                     exit;
                 } else {
@@ -112,6 +119,7 @@ class AuthController {
     }
 
     public function logout() {
+        // ... (kod metody bez zmian) ...
         if (session_status() == PHP_SESSION_NONE) {
             session_start();
         }
@@ -120,24 +128,46 @@ class AuthController {
         exit;
     }
 
-    // STATYCZNA METODA DO SPRAWDZANIA UPRAWNIEŃ ADMINA
-    public static function checkAdmin() { // <-- KLUCZOWE JEST "static"
+    public static function checkAdmin() {
+        // ... (kod metody bez zmian) ...
         if (session_status() == PHP_SESSION_NONE) {
             session_start(); 
         }
 
         if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
-            http_response_code(403); // Forbidden
-            echo "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Brak uprawnień</title><link rel='stylesheet' href='css/style.css'></head><body>"; // Zakładamy, że css/style.css jest dostępne z głównego katalogu public
-            echo "<div style='text-align:center; padding: 50px; font-family: sans-serif;'>"; // Dodano font-family dla lepszego wyglądu
+            http_response_code(403); 
+            echo "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Brak uprawnień</title><link rel='stylesheet' href='css/style.css'></head><body>"; 
+            echo "<div style='text-align:center; padding: 50px; font-family: sans-serif;'>"; 
             echo "<h1>Brak uprawnień (403 Forbidden)</h1>";
             echo "<p>Nie masz uprawnień do dostępu do tej strony. Tylko administratorzy mogą tu wejść.</p>";
-            echo '<p><a href="index.php?action=home" style="color: #007bff; text-decoration: none;">Powrót na stronę główną</a></p>'; // Dodano prosty styl dla linku
-            echo "</div>";
-            echo "</body></html>";
+            echo '<p><a href="index.php?action=home" style="color: #007bff; text-decoration: none;">Powrót na stronę główną</a></p>'; 
+            echo "</div></body></html>";
             exit; 
         }
         return true;
+    }
+
+    // NOWA METODA do sprawdzania dostępności emaila
+    public function checkEmailAvailability() {
+        header('Content-Type: application/json'); // Ustawiamy typ odpowiedzi na JSON
+
+        $email = trim($_GET['email'] ?? ''); // Pobieramy email z parametru GET
+        $response = ['available' => false]; // Domyślna odpowiedź
+
+        if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $userModel = new User($this->db);
+            if ($userModel->findByEmail($email)) {
+                $response['available'] = false; // Email jest zajęty
+            } else {
+                $response['available'] = true; // Email jest dostępny
+            }
+        } else {
+            // Można dodać informację o błędzie, jeśli email jest pusty lub niepoprawny
+            $response['error'] = 'Nieprawidłowy format email lub brak emaila.';
+        }
+
+        echo json_encode($response);
+        exit; // Zakończ wykonywanie skryptu po wysłaniu odpowiedzi JSON
     }
 }
 ?>
