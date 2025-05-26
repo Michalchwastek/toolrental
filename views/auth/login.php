@@ -1,6 +1,13 @@
 <?php
-// $errors = $errors ?? []; // Do obsługi błędów logowania
-// $success_message = $success_message ?? ''; // Do komunikatu po rejestracji
+$errors = $GLOBALS['errors'] ?? [];
+$email_value = $GLOBALS['email_value'] ?? ''; 
+$success_message = ''; 
+if (isset($_GET['status']) && $_GET['status'] === 'registered') {
+    $success_message = "Rejestracja zakończona pomyślnie! Możesz się teraz zalogować.";
+}
+// Można też pobierać $success_message z sesji, jeśli jest tam ustawiany
+// np. $success_message = $_SESSION['success_message'] ?? $success_message;
+// unset($_SESSION['success_message']);
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -11,18 +18,19 @@
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <header>
-        <h1>Zaloguj się do Toolsy</h1>
-    </header>
-    <main>
+    <main class="container">
+        <div class="page-header">
+            <h1>Zaloguj się do Toolsy</h1>
+        </div>
+
         <?php if (!empty($success_message)): ?>
-            <div class="success" style="color: green; border: 1px solid green; padding: 10px; margin-bottom: 15px;">
+            <div class="alert alert-success">
                 <?= htmlspecialchars($success_message) ?>
             </div>
-        <?php endif;  ?>
+        <?php endif; ?>
 
-        <?php  if (!empty($errors)): ?>
-            <div class="errors" style="color: red; border: 1px solid red; padding: 10px; margin-bottom: 15px;">
+        <?php if (!empty($errors)): ?>
+            <div class="alert alert-danger">
                 <p>Wystąpiły błędy:</p>
                 <ul>
                     <?php foreach ($errors as $error): ?>
@@ -30,12 +38,12 @@
                     <?php endforeach; ?>
                 </ul>
             </div>
-        <?php endif;  ?>
+        <?php endif; ?>
 
         <form action="index.php?action=login_process" method="POST">
             <div>
                 <label for="email">Email:</label>
-                <input type="email" id="email" name="email" required value="<?php /* echo htmlspecialchars($_POST['email'] ?? ''); */ ?>">
+                <input type="email" id="email" name="email" required value="<?= htmlspecialchars($email_value) ?>">
             </div>
             <div>
                 <label for="haslo">Hasło:</label>
@@ -45,10 +53,8 @@
                 <button type="submit">Zaloguj się</button>
             </div>
         </form>
-        <p>Nie masz konta? <a href="index.php?action=register">Zarejestruj się</a></p>
-        </main>
-    <footer>
-        <p>&copy; <?= date('Y') ?> Toolsy</p>
-    </footer>
-</body>
+        <p style="margin-top: 20px; text-align:center;">Nie masz konta? <a href="index.php?action=register">Zarejestruj się</a></p>
+    </main>
+
+    </body>
 </html>
