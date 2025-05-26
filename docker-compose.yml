@@ -1,0 +1,71 @@
+version: "3.8"
+
+services:
+  # Serwis PHP
+  php:
+    # ... (reszta konfiguracji PHP bez zmian) ...
+    image: php:8.2.11-fpm-alpine3.18
+    container_name: toolrental_php
+    volumes:
+      - ./public:/var/www/html/public
+      - ./src:/var/www/html/src
+      - ./views:/var/www/html/views
+      - ./config:/var/www/html/config
+    working_dir: /var/www/html
+    networks:
+      - toolrental_network
+
+  # Serwis Nginx
+  nginx:
+    # ... (reszta konfiguracji Nginx bez zmian) ...
+    image: nginx:alpine
+    container_name: toolrental_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./public:/var/www/html/public
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - php
+    networks:
+      - toolrental_network
+
+  # Serwis Bazy Danych - PostgreSQL
+  db:
+    # ... (reszta konfiguracji PostgreSQL bez zmian, PAMIĘTAJ O ZMIANIE HASŁA!) ...
+    image: postgres:15-alpine
+    container_name: toolrental_db
+    environment:
+      POSTGRES_DB: toolsy_db
+      POSTGRES_USER: toolsy_user
+      POSTGRES_PASSWORD: TwojeSuperSilneHaslo # !! ZMIEŃ TO HASŁO !!
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - toolrental_network
+
+  # Serwis pgAdmin
+  pgadmin:
+    image: dpage/pgadmin4 # Oficjalny obraz pgAdmin4
+    container_name: toolrental_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com # Email do logowania do pgAdmina
+      PGADMIN_DEFAULT_PASSWORD: admin # Hasło do logowania do pgAdmina - ZMIEŃ JE!
+    ports:
+      - "5050:80" # Mapujemy port 5050 na Twoim kompie na port 80 w kontenerze pgAdmin
+    depends_on:
+      - db # pgAdmin powinien startować po bazie danych
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin # Trwałe przechowywanie danych pgAdmina (np. zapisanych serwerów)
+    networks:
+      - toolrental_network
+
+networks:
+  toolrental_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  pgadmin_data: # Dodajemy wolumen dla pgAdmina
