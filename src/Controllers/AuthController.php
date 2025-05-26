@@ -1,10 +1,18 @@
 <?php
 
+// Wymagane klasy - w przyszłości autoloader
+// Upewnij się, że stała SRC_PATH jest zdefiniowana w public/index.php przed dołączeniem tego pliku
+if (!defined('SRC_PATH')) {
+    // Definicja awaryjna, jeśli plik jest wywoływany w innym kontekście,
+    // ale najlepiej, aby SRC_PATH było zdefiniowane globalnie przez index.php
+    define('SRC_PATH', dirname(__DIR__)); // Zakłada, że Controllers jest w src/, a src/ jest o jeden poziom wyżej
+}
+
 require_once SRC_PATH . '/Core/Database.php';
 require_once SRC_PATH . '/Models/User.php';
 
 class AuthController {
-
+    
     private $db;
 
     public function __construct() {
@@ -12,16 +20,23 @@ class AuthController {
     }
 
     public function showRegistrationForm() {
-        // Jeśli kod debugujący był tu, upewnij się, że jest usunięty lub zakomentowany
+        $errors = $GLOBALS['errors'] ?? []; 
+        $input = $GLOBALS['input'] ?? [];
         include VIEWS_PATH . '/auth/register.php';
     }
 
     public function processRegistration() {
         $errors = []; 
+        $input = [
+            'imie' => trim($_POST['imie'] ?? ''),
+            'nazwisko' => trim($_POST['nazwisko'] ?? ''),
+            'email' => trim($_POST['email'] ?? '')
+        ];
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $imie = trim($_POST['imie'] ?? '');
-            $nazwisko = trim($_POST['nazwisko'] ?? '');
-            $email = trim($_POST['email'] ?? '');
+            $imie = $input['imie'];
+            $nazwisko = $input['nazwisko'];
+            $email = $input['email'];
             $haslo = $_POST['haslo'] ?? '';
             $haslo_confirm = $_POST['haslo_confirm'] ?? '';
 
@@ -35,8 +50,6 @@ class AuthController {
             if (empty($errors)) {
                 $user = new User($this->db);
                 if ($user->create($imie, $nazwisko, $email, $haslo)) {
-                    // Przekierowanie na stronę logowania z komunikatem o sukcesie
-                    // Użyjemy parametru GET do przekazania komunikatu
                     header('Location: index.php?action=login&status=registered');
                     exit;
                 } else {
@@ -44,32 +57,30 @@ class AuthController {
                 }
             }
         }
-        // Jeśli błędy, wyświetl formularz ponownie (przekazując $errors)
+        $GLOBALS['errors'] = $errors;
+        $GLOBALS['input'] = $input; 
         include VIEWS_PATH . '/auth/register.php';
     }
 
     public function showLoginForm() {
-        $errors = []; // Inicjalizacja tablicy błędów dla widoku logowania
-        $success_message = ''; // Inicjalizacja komunikatu o sukcesie
+        $errors = $GLOBALS['errors'] ?? []; 
+        $email_value = $GLOBALS['email_value'] ?? ''; 
+        $success_message = ''; 
 
-        // Sprawdź, czy jest komunikat o pomyślnej rejestracji
         if (isset($_GET['status']) && $_GET['status'] === 'registered') {
             $success_message = "Rejestracja zakończona pomyślnie! Możesz się teraz zalogować.";
         }
-        // Tutaj można też obsłużyć inne statusy, np. wylogowanie
-
-        // Odkomentuj wyświetlanie błędów i sukcesu w pliku login.php
+        
         include VIEWS_PATH . '/auth/login.php';
     }
 
     public function processLogin() {
         $errors = [];
-        $email_value = ''; // Do przechowania emaila przy błędnym logowaniu
+        $email_value = trim($_POST['email'] ?? ''); 
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $email = trim($_POST['email'] ?? '');
+            $email = $email_value;
             $haslo = $_POST['haslo'] ?? '';
-            $email_value = $email; // Zapisz email do ponownego wyświetlenia
 
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $errors[] = "Niepoprawny format email.";
@@ -83,13 +94,11 @@ class AuthController {
                 $loggedInUser = $userModel->authenticate($email, $haslo);
 
                 if ($loggedInUser) {
-                    // Logowanie pomyślne - ustaw dane sesji
                     $_SESSION['user_id'] = $loggedInUser['id_uzytkownika'];
                     $_SESSION['user_email'] = $loggedInUser['email'];
                     $_SESSION['user_role'] = $loggedInUser['rola'];
                     $_SESSION['user_imie'] = $loggedInUser['imie'];
-
-                    // Przekieruj na stronę główną lub dashboard
+                    
                     header('Location: index.php?action=home&status=loggedin');
                     exit;
                 } else {
@@ -97,16 +106,38 @@ class AuthController {
                 }
             }
         }
-        // Jeśli błędy lub nie POST, wyświetl formularz logowania ponownie
-        // Przekaż $errors i $email_value do widoku login.php
+        $GLOBALS['errors'] = $errors;
+        $GLOBALS['email_value'] = $email_value; 
         include VIEWS_PATH . '/auth/login.php';
     }
 
-    // Metoda wylogowania (dodamy później)
     public function logout() {
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start();
+        }
         session_destroy();
         header('Location: index.php?action=home&status=loggedout');
         exit;
+    }
+
+    // STATYCZNA METODA DO SPRAWDZANIA UPRAWNIEŃ ADMINA
+    public static function checkAdmin() { // <-- KLUCZOWE JEST "static"
+        if (session_status() == PHP_SESSION_NONE) {
+            session_start(); 
+        }
+
+        if (!isset($_SESSION['user_id']) || !isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+            http_response_code(403); // Forbidden
+            echo "<!DOCTYPE html><html lang='pl'><head><meta charset='UTF-8'><title>Brak uprawnień</title><link rel='stylesheet' href='css/style.css'></head><body>"; // Zakładamy, że css/style.css jest dostępne z głównego katalogu public
+            echo "<div style='text-align:center; padding: 50px; font-family: sans-serif;'>"; // Dodano font-family dla lepszego wyglądu
+            echo "<h1>Brak uprawnień (403 Forbidden)</h1>";
+            echo "<p>Nie masz uprawnień do dostępu do tej strony. Tylko administratorzy mogą tu wejść.</p>";
+            echo '<p><a href="index.php?action=home" style="color: #007bff; text-decoration: none;">Powrót na stronę główną</a></p>'; // Dodano prosty styl dla linku
+            echo "</div>";
+            echo "</body></html>";
+            exit; 
+        }
+        return true;
     }
 }
 ?>
