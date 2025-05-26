@@ -10,57 +10,66 @@ define('CONFIG_PATH', BASE_PATH . '/config');
 
 require_once CONFIG_PATH . '/database.php';
 require_once SRC_PATH . '/Controllers/AuthController.php';
+require_once SRC_PATH . '/Controllers/CategoryController.php';
+require_once SRC_PATH . '/Controllers/ToolController.php'; // <-- DODAJ
 
 $action = $_GET['action'] ?? 'home';
+
 $authController = new AuthController();
+$categoryController = new CategoryController();
+$toolController = new ToolController(); // <-- DODAJ
 
-// Prosty sposób na wyświetlenie informacji o zalogowanym użytkowniku na każdej stronie (do celów testowych)
-// Można to przenieść do jakiegoś wspólnego layoutu/nagłówka później
-if (isset($_SESSION['user_id'])) {
-    echo "<div style='background-color: #e0e0e0; padding: 10px; text-align: right;'>";
-    echo "Zalogowany jako: " . htmlspecialchars($_SESSION['user_imie']) . " (" . htmlspecialchars($_SESSION['user_email']) . ") - Rola: " . htmlspecialchars($_SESSION['user_role']);
-    echo " | <a href='index.php?action=logout'>Wyloguj się</a>";
-    echo "</div>";
-}
-
+ob_start(); 
 
 switch ($action) {
     case 'home':
         echo "<h1>Witaj na stronie głównej Toolsy!</h1>";
-        // Prosty komunikat o statusie logowania/wylogowania
         if (isset($_GET['status'])) {
             if ($_GET['status'] === 'loggedin') echo "<p style='color:green;'>Zalogowano pomyślnie!</p>";
             if ($_GET['status'] === 'loggedout') echo "<p style='color:blue;'>Wylogowano pomyślnie!</p>";
         }
-        echo "<p>To jest nasza przyszła wypożyczalnia narzędzi.</p>";
-        // Pokaż różne linki w zależności od tego, czy użytkownik jest zalogowany
         if (!isset($_SESSION['user_id'])) {
             echo '<p><a href="index.php?action=login">Przejdź do logowania</a></p>';
             echo '<p><a href="index.php?action=register">Zarejestruj się</a></p>';
         } else {
-            // Tutaj mogą być linki do profilu, narzędzi itp.
             echo "<p>Jesteś zalogowany. Możesz przeglądać narzędzia (funkcjonalność wkrótce).</p>";
         }
         break;
 
-    case 'login':
-        $authController->showLoginForm();
-        break;
+    // AuthController (bez zmian)
+    case 'login': $authController->showLoginForm(); break;
+    case 'login_process': $authController->processLogin(); break;
+    case 'register': $authController->showRegistrationForm(); break;
+    case 'register_process': $authController->processRegistration(); break;
+    case 'logout': $authController->logout(); break;
 
-    case 'login_process': // <-- NOWA AKCJA
-        $authController->processLogin();
-        break;
+    // CategoryController (bez zmian)
+    case 'categories_list': $categoryController->index(); break;
+    case 'category_create_form': $categoryController->createForm(); break;
+    case 'category_store': $categoryController->store(); break;
+    case 'category_edit_form': $categoryController->editForm(); break;
+    case 'category_update': $categoryController->update(); break;
+    case 'category_delete': $categoryController->delete(); break;
 
-    case 'register':
-        $authController->showRegistrationForm();
+    // NOWE AKCJE DLA NARZĘDZI (ToolController)
+    case 'tools_list':
+        // Tutaj też w przyszłości dodamy sprawdzenie roli admina
+        $toolController->index();
         break;
-
-    case 'register_process':
-        $authController->processRegistration();
+    case 'tool_create_form':
+        $toolController->createForm();
         break;
-
-    case 'logout': // <-- NOWA AKCJA
-        $authController->logout();
+    case 'tool_store':
+        $toolController->store();
+        break;
+    case 'tool_edit_form':
+        $toolController->editForm();
+        break;
+    case 'tool_update':
+        $toolController->update();
+        break;
+    case 'tool_delete':
+        $toolController->delete();
         break;
 
     default:
@@ -70,4 +79,17 @@ switch ($action) {
         echo '<p><a href="index.php?action=home">Powrót na stronę główną</a></p>';
         break;
 }
+
+$mainContent = ob_get_clean(); 
+
+if (isset($_SESSION['user_id'])) {
+    echo "<div style='background-color: #e0e0e0; padding: 10px; text-align: right; border-bottom: 1px solid #ccc;'>";
+    echo "Zalogowany jako: <strong>" . htmlspecialchars($_SESSION['user_imie']) . "</strong> (" . htmlspecialchars($_SESSION['user_email']) . ") - Rola: " . htmlspecialchars($_SESSION['user_role']);
+    echo " | <a href='index.php?action=categories_list'>Kategorie</a>"; // Zmieniony link
+    echo " | <a href='index.php?action=tools_list'>Narzędzia (Admin)</a>"; // NOWY LINK
+    echo " | <a href='index.php?action=logout'>Wyloguj się</a>";
+    echo "</div>";
+}
+
+echo $mainContent;
 ?>
