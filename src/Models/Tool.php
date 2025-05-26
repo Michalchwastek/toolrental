@@ -27,7 +27,7 @@ class Tool {
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $e) {
             // Logowanie błędu
-            // echo "Błąd przy pobieraniu narzędzi: " . $e->getMessage();
+            // error_log("Błąd przy pobieraniu narzędzi: " . $e->getMessage());
             return [];
         }
     }
@@ -44,18 +44,14 @@ class Tool {
             $stmt->execute();
             $tool = $stmt->fetch(PDO::FETCH_ASSOC);
             if ($tool) {
-                $this->id_narzedzia = $tool['id_narzedzia'];
-                $this->nazwa_narzedzia = $tool['nazwa_narzedzia'];
-                $this->opis_narzedzia = $tool['opis_narzedzia'];
-                $this->id_kategorii = $tool['id_kategorii'];
-                $this->nazwa_kategorii = $tool['nazwa_kategorii'];
-                $this->cena_za_dobe = $tool['cena_za_dobe'];
-                $this->dostepnosc = $tool['dostepnosc'];
-                $this->zdjecie_url = $tool['zdjecie_url'];
-                return $tool;
+                // Możemy chcieć ustawić właściwości obiektu, jeśli jest taka potrzeba
+                // $this->id_narzedzia = $tool['id_narzedzia'];
+                // ... itd.
+                return $tool; // Zwracamy tablicę asocjacyjną
             }
             return false;
         } catch (PDOException $e) {
+            // error_log("Błąd przy pobieraniu narzędzia by ID: " . $e->getMessage());
             return false;
         }
     }
@@ -69,17 +65,17 @@ class Tool {
             $stmt->bindParam(':nazwa_narzedzia', $nazwa);
             $stmt->bindParam(':opis_narzedzia', $opis);
             $stmt->bindParam(':id_kategorii', $id_kategorii, PDO::PARAM_INT);
-            $stmt->bindParam(':cena_za_dobe', $cena); // PDO samo wykryje typ dla decimal
+            $stmt->bindParam(':cena_za_dobe', $cena); 
             $stmt->bindParam(':dostepnosc', $dostepnosc, PDO::PARAM_BOOL);
             $stmt->bindParam(':zdjecie_url', $zdjecie);
-
+            
             if ($stmt->execute()) {
-                $this->id_narzedzia = $this->db->lastInsertId();
-                return true;
+                // $this->id_narzedzia = $this->db->lastInsertId(); // Ustawiamy, jeśli obiekt ma reprezentować nowo utworzone narzędzie
+                return $this->db->lastInsertId(); // Lub zwracamy ID
             }
             return false;
         } catch (PDOException $e) {
-            // echo "Błąd przy tworzeniu narzędzia: " . $e->getMessage(); // Debug
+            // error_log("Błąd przy tworzeniu narzędzia: " . $e->getMessage());
             return false;
         }
     }
@@ -103,24 +99,37 @@ class Tool {
             $stmt->bindParam(':dostepnosc', $dostepnosc, PDO::PARAM_BOOL);
             $stmt->bindParam(':zdjecie_url', $zdjecie);
             $stmt->bindParam(':id_narzedzia', $id, PDO::PARAM_INT);
-
+            
             return $stmt->execute();
         } catch (PDOException $e) {
-            // echo "Błąd przy aktualizacji narzędzia: " . $e->getMessage(); // Debug
+            // error_log("Błąd przy aktualizacji narzędzia: " . $e->getMessage());
             return false;
         }
     }
 
     // Usuń narzędzie
     public function delete($id) {
-        // UWAGA: Przed usunięciem narzędzia warto sprawdzić, czy nie ma aktywnych wypożyczeń!
         $sql = "DELETE FROM Narzedzia WHERE id_narzedzia = :id_narzedzia";
         try {
             $stmt = $this->db->prepare($sql);
             $stmt->bindParam(':id_narzedzia', $id, PDO::PARAM_INT);
             return $stmt->execute();
         } catch (PDOException $e) {
-            // Możliwy błąd, jeśli istnieją wypożyczenia tego narzędzia (jeśli FK ma ograniczenie RESTRICT)
+            // error_log("Błąd przy usuwaniu narzędzia: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    // Ustaw dostępność narzędzia
+    public function setAvailability($id_narzedzia, $is_available) {
+        $sql = "UPDATE Narzedzia SET dostepnosc = :dostepnosc WHERE id_narzedzia = :id_narzedzia";
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->bindParam(':dostepnosc', $is_available, PDO::PARAM_BOOL);
+            $stmt->bindParam(':id_narzedzia', $id_narzedzia, PDO::PARAM_INT);
+            return $stmt->execute();
+        } catch (PDOException $e) {
+            // error_log("Błąd przy ustawianiu dostępności: " . $e->getMessage());
             return false;
         }
     }

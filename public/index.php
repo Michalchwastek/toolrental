@@ -3,26 +3,25 @@ if (session_status() == PHP_SESSION_NONE) {
     session_start();
 }
 
-// Definicje ścieżek - kluczowe, aby były na początku i tylko tutaj
 define('BASE_PATH', dirname(__DIR__));
 define('SRC_PATH', BASE_PATH . '/src');
 define('VIEWS_PATH', BASE_PATH . '/views');
 define('CONFIG_PATH', BASE_PATH . '/config');
 
-// Ładowanie konfiguracji i kontrolerów
 require_once CONFIG_PATH . '/database.php';
 require_once SRC_PATH . '/Controllers/AuthController.php';
 require_once SRC_PATH . '/Controllers/CategoryController.php';
 require_once SRC_PATH . '/Controllers/ToolController.php'; 
+require_once SRC_PATH . '/Controllers/RentalController.php';
 
 $action = $_GET['action'] ?? 'home';
 
-// Instancje kontrolerów
 $authController = new AuthController();
 $categoryController = new CategoryController();
 $toolController = new ToolController(); 
+$rentalController = new RentalController();
 
-ob_start(); // Włącz buforowanie wyjścia
+ob_start(); 
 
 switch ($action) {
     case 'home':
@@ -32,24 +31,20 @@ switch ($action) {
             if ($_GET['status'] === 'loggedout') echo "<p style='color:blue;'>Wylogowano pomyślnie!</p>";
         }
         echo '<p><a href="index.php?action=tools_public_list">Zobacz dostępne narzędzia</a></p>';
-
         if (!isset($_SESSION['user_id'])) {
             echo '<p><a href="index.php?action=login">Przejdź do logowania</a></p>';
             echo '<p><a href="index.php?action=register">Zarejestruj się</a></p>';
-        } else {
-            // Komunikat dla zalogowanego użytkownika, np.
-            // echo "<p>Cieszymy się, że jesteś z nami, " . htmlspecialchars($_SESSION['user_imie']) . "!</p>";
         }
         break;
 
-    // AuthController Akcje
+    // AuthController
     case 'login': $authController->showLoginForm(); break;
     case 'login_process': $authController->processLogin(); break;
     case 'register': $authController->showRegistrationForm(); break;
     case 'register_process': $authController->processRegistration(); break;
     case 'logout': $authController->logout(); break;
 
-    // CategoryController Akcje (Admin)
+    // CategoryController (Admin)
     case 'categories_list': AuthController::checkAdmin(); $categoryController->index(); break;
     case 'category_create_form': AuthController::checkAdmin(); $categoryController->createForm(); break;
     case 'category_store': AuthController::checkAdmin(); $categoryController->store(); break;
@@ -57,7 +52,7 @@ switch ($action) {
     case 'category_update': AuthController::checkAdmin(); $categoryController->update(); break;
     case 'category_delete': AuthController::checkAdmin(); $categoryController->delete(); break;
 
-    // ToolController Akcje (Admin)
+    // ToolController (Admin)
     case 'tools_list': AuthController::checkAdmin(); $toolController->index(); break;
     case 'tool_create_form': AuthController::checkAdmin(); $toolController->createForm(); break;
     case 'tool_store': AuthController::checkAdmin(); $toolController->store(); break;
@@ -65,12 +60,15 @@ switch ($action) {
     case 'tool_update': AuthController::checkAdmin(); $toolController->update(); break;
     case 'tool_delete': AuthController::checkAdmin(); $toolController->delete(); break;
 
-    // ToolController Akcje (Publiczne)
-    case 'tools_public_list':
-        $toolController->publicList();
-        break;
-    case 'show_tool_details': 
-        $toolController->showToolDetails();
+    // ToolController (Publiczne)
+    case 'tools_public_list': $toolController->publicList(); break;
+    case 'show_tool_details': $toolController->showToolDetails(); break;
+
+    // RentalController
+    case 'process_rental': $rentalController->processRental(); break;
+    case 'my_rentals': $rentalController->myRentals(); break;
+    case 'process_return': // <-- NOWA AKCJA
+        $rentalController->processReturn();
         break;
 
     default:
@@ -81,13 +79,10 @@ switch ($action) {
         break;
 }
 
-$mainContent = ob_get_clean(); // Pobierz zawartość bufora i wyczyść go
-
-// ----- WYŚWIETLANIE PASKA INFORMACYJNEGO I GŁÓWNEJ ZAWARTOŚCI -----
+$mainContent = ob_get_clean(); 
 
 // Pasek informacyjny
 if (isset($_SESSION['user_id'])) {
-    // Pasek dla zalogowanego użytkownika
     echo "<div style='background-color: #e0e0e0; padding: 10px; text-align: right; border-bottom: 1px solid #ccc;'>";
     echo "<a href='index.php?action=home' style='text-decoration:none; color:black; margin-right:15px;'>Strona główna</a>";
     echo "<a href='index.php?action=tools_public_list' style='text-decoration:none; color:black; margin-right:15px;'>Narzędzia</a>";
@@ -95,13 +90,14 @@ if (isset($_SESSION['user_id'])) {
     if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin') {
         echo " | <a href='index.php?action=categories_list'>Kategorie (Admin)</a>";
         echo " | <a href='index.php?action=tools_list'>Narzędzia (Admin)</a>";
+        // Admin też może chcieć widzieć "Moje Wypożyczenia", jeśli coś wypożyczył testowo
+        echo " | <a href='index.php?action=my_rentals'>Moje Wypożyczenia</a>"; 
+    } else {
+         echo " | <a href='index.php?action=my_rentals'>Moje Wypożyczenia</a>";
     }
-    // Tutaj można dodać link do panelu "Moje Wypożyczenia" dla zwykłego użytkownika
-    // else { echo " | <a href='index.php?action=my_rentals'>Moje Wypożyczenia</a>"; }
     echo " | <a href='index.php?action=logout'>Wyloguj się</a>";
     echo "</div>";
 } else {
-    // Pasek dla niezalogowanego użytkownika
     echo "<div style='background-color: #f0f0f0; padding: 10px; text-align: right; border-bottom: 1px solid #ccc;'>";
     echo "<a href='index.php?action=home' style='text-decoration:none; color:black; margin-right:15px;'>Strona główna</a>";
     echo "<a href='index.php?action=tools_public_list' style='text-decoration:none; color:black; margin-right:15px;'>Narzędzia</a>";
@@ -109,10 +105,7 @@ if (isset($_SESSION['user_id'])) {
     echo "</div>";
 }
 
-// Wyświetl główną zawartość (wygenerowaną przez switch)
 echo $mainContent;
 
-// Globalna stopka (opcjonalnie)
-// echo "<footer style='text-align:center; padding: 20px; border-top: 1px solid #ccc; margin-top: 30px;'><p>&copy; " . date('Y') . " Toolsy - Wypożyczalnia Narzędzi</p></footer>";
-
+echo "<footer style='text-align:center; padding: 20px; border-top: 1px solid #ccc; margin-top: 30px;'><p>&copy; " . date('Y') . " Toolsy - Wypożyczalnia Narzędzi</p></footer>";
 ?>

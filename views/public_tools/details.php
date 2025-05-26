@@ -1,6 +1,18 @@
 <?php
 // $tool jest przekazywane z ToolController::showToolDetails()
-// $errors, $success_message itp. mogą być potrzebne, jeśli dodamy tu formularze (np. wypożyczenia)
+// Zmienne $errors i $rental_form_data są przekazywane przez sesję z RentalController::processRental() w razie błędu
+$errors = $_SESSION['rental_errors'] ?? [];
+$rental_form_data = $_SESSION['rental_form_data'] ?? [];
+
+// Sprawdzamy, czy błędy dotyczą tego konkretnego narzędzia
+// (prosty mechanizm, aby błędy z innego narzędzia nie wyświetlały się tutaj)
+if (!empty($errors) && ($rental_form_data['id_narzedzia'] ?? 0) != ($tool['id_narzedzia'] ?? -1)) {
+    $errors = []; // Wyzeruj błędy, jeśli nie dotyczą tego narzędzia
+    $rental_form_data = [];
+}
+
+unset($_SESSION['rental_errors']); // Zawsze usuwaj błędy z sesji po ich potencjalnym użyciu
+unset($_SESSION['rental_form_data']); // Zawsze usuwaj dane formularza z sesji
 ?>
 <!DOCTYPE html>
 <html lang="pl">
@@ -71,6 +83,8 @@
             text-decoration: none;
             border-radius: 5px;
             font-size: 1.1em;
+            border: none; /* Dla spójności z button */
+            cursor: pointer;
         }
         .actions .rent-button:hover {
             background-color: #0056b3;
@@ -89,12 +103,20 @@
         .back-link:hover {
             text-decoration: underline;
         }
+        .errors { 
+            color: red; 
+            border: 1px solid red; 
+            padding: 10px; 
+            margin-bottom: 15px;
+            background-color: #ffe0e0;
+            border-radius: 5px;
+        }
+        .errors ul { list-style-position: inside; padding-left: 0; }
     </style>
 </head>
 <body>
     <header>
         <?php
-        // Pasek informacyjny - skopiowany z index.php dla spójności
         if (isset($_SESSION['user_id'])) {
             echo "<div style='background-color: #e0e0e0; padding: 10px; text-align: right; border-bottom: 1px solid #ccc;'>";
             echo "<a href='index.php?action=home' style='text-decoration:none; color:black; margin-right:15px;'>Strona główna</a>";
@@ -103,6 +125,8 @@
             if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin') {
                 echo " | <a href='index.php?action=categories_list'>Kategorie (Admin)</a>";
                 echo " | <a href='index.php?action=tools_list'>Narzędzia (Admin)</a>";
+            } else {
+                 echo " | <a href='index.php?action=my_rentals'>Moje Wypożyczenia</a>";
             }
             echo " | <a href='index.php?action=logout'>Wyloguj się</a>";
             echo "</div>";
@@ -123,12 +147,13 @@
                 <?php if (!empty($tool['zdjecie_url'])): ?>
                     <img src="<?= htmlspecialchars($tool['zdjecie_url']) ?>" alt="<?= htmlspecialchars($tool['nazwa_narzedzia']) ?>">
                 <?php else: ?>
-                    <img src="https://via.placeholder.com/600x400.png?text=Brak+Zdjecia" alt="Brak zdjęcia"> <?php endif; ?>
+                    <img src="https://via.placeholder.com/600x400.png?text=Brak+Zdjecia" alt="Brak zdjęcia">
+                <?php endif; ?>
 
                 <div class="property">
                     <strong>Kategoria:</strong> <?= htmlspecialchars($tool['nazwa_kategorii'] ?? 'N/A') ?>
                 </div>
-
+                
                 <div class="price">
                     Cena: <?= htmlspecialchars(number_format(floatval($tool['cena_za_dobe']), 2, ',', ' ')) ?> zł / doba
                 </div>
@@ -148,27 +173,51 @@
                 <?php endif; ?>
 
                 <div class="actions">
-                    <?php if (isset($_SESSION['user_id'])): // Tylko dla zalogowanych użytkowników ?>
+                    <?php if (!empty($errors)): ?>
+                        <div class="errors">
+                            <p>Błędy przy próbie wypożyczenia:</p>
+                            <ul>
+                                <?php foreach ($errors as $error): ?>
+                                    <li><?= htmlspecialchars($error) ?></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    <?php endif; ?>
+                    
+                    <?php if (isset($_GET['error']) && $_GET['error'] === 'not_logged_in_for_rental'): ?>
+                        <p class="errors">Musisz być zalogowany, aby wypożyczyć narzędzie. <a href="index.php?action=login&redirect_to=show_tool_details&id=<?= $tool['id_narzedzia'] ?>">Zaloguj się</a>.</p>
+                    <?php endif; ?>
+
+
+                    <?php if (isset($_SESSION['user_id'])): ?>
                         <?php if ($tool['dostepnosc']): ?>
-                            <a href="index.php?action=rent_tool_form&id=<?= $tool['id_narzedzia'] ?>" class="rent-button">Wypożycz teraz</a>
-                            <p style="margin-top:10px; font-size:0.9em;">(Funkcjonalność wypożyczania wkrótce!)</p>
+                            <form action="index.php?action=process_rental" method="POST">
+                                <input type="hidden" name="id_narzedzia" value="<?= $tool['id_narzedzia'] ?>">
+                                <div>
+                                    <label for="data_planowanego_zwrotu">Planowana data zwrotu:</label>
+                                    <input type="date" id="data_planowanego_zwrotu" name="data_planowanego_zwrotu" 
+                                           min="<?= date('Y-m-d', strtotime('+1 day')) ?>" required 
+                                           value="<?= htmlspecialchars($rental_form_data['data_planowanego_zwrotu'] ?? date('Y-m-d', strtotime('+7 days'))) ?>"> 
+                                </div>
+                                <button type="submit" class="rent-button" style="margin-top: 10px;">Wypożycz teraz</button>
+                            </form>
                         <?php else: ?>
                             <p class="unavailable-message">Narzędzie obecnie niedostępne.</p>
                         <?php endif; ?>
-                    <?php else: // Dla niezalogowanych ?>
-                        <p><a href="index.php?action=login&redirect_to=show_tool_details&id=<?= $tool['id_narzedzia'] ?>">Zaloguj się, aby wypożyczyć</a></p>
+                    <?php else: ?>
+                        <p>Aby wypożyczyć, <a href="index.php?action=login&redirect_to=show_tool_details&id=<?= $tool['id_narzedzia'] ?>">zaloguj się</a>.</p>
                     <?php endif; ?>
                 </div>
 
             <?php else: ?>
                 <p>Nie znaleziono informacji o narzędziu.</p>
             <?php endif; ?>
-
+            
             <a href="index.php?action=tools_public_list" class="back-link">&laquo; Powrót do listy narzędzi</a>
         </div>
     </main>
-    <footer>
-        <p style='text-align:center; padding: 20px; border-top: 1px solid #ccc; margin-top: 30px;'>&copy; <?= date('Y') ?> Toolsy - Wypożyczalnia Narzędzi</p>
+    <footer style='text-align:center; padding: 20px; border-top: 1px solid #ccc; margin-top: 30px;'>
+        <p>&copy; <?= date('Y') ?> Toolsy - Wypożyczalnia Narzędzi</p>
     </footer>
 </body>
 </html>
