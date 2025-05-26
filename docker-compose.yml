@@ -1,10 +1,11 @@
-version: "3.8"
+# docker-compose.yml
+
+# version: '3.8'  <-- UPEWNIJ SIĘ, ŻE TEJ LINII NIE MA LUB JEST USUNIĘTA
 
 services:
   # Serwis PHP
   php:
-    # ... (reszta konfiguracji PHP bez zmian) ...
-    image: php:8.2.11-fpm-alpine3.18
+    build: ./docker/php # Ścieżka do folderu zawierającego Dockerfile
     container_name: toolrental_php
     volumes:
       - ./public:/var/www/html/public
@@ -15,9 +16,8 @@ services:
     networks:
       - toolrental_network
 
-  # Serwis Nginx
+  # Serwis Nginx (bez zmian)
   nginx:
-    # ... (reszta konfiguracji Nginx bez zmian) ...
     image: nginx:alpine
     container_name: toolrental_nginx
     ports:
@@ -30,15 +30,14 @@ services:
     networks:
       - toolrental_network
 
-  # Serwis Bazy Danych - PostgreSQL
+  # Serwis Bazy Danych - PostgreSQL (bez zmian)
   db:
-    # ... (reszta konfiguracji PostgreSQL bez zmian, PAMIĘTAJ O ZMIANIE HASŁA!) ...
     image: postgres:15-alpine
     container_name: toolrental_db
     environment:
       POSTGRES_DB: toolsy_db
       POSTGRES_USER: toolsy_user
-      POSTGRES_PASSWORD: TwojeSuperSilneHaslo # !! ZMIEŃ TO HASŁO !!
+      POSTGRES_PASSWORD: TwojeSuperSilneHaslo # Pamiętaj o swoim haśle
     ports:
       - "5432:5432"
     volumes:
@@ -46,19 +45,19 @@ services:
     networks:
       - toolrental_network
 
-  # Serwis pgAdmin
+  # Serwis pgAdmin (bez zmian)
   pgadmin:
-    image: dpage/pgadmin4 # Oficjalny obraz pgAdmin4
+    image: dpage/pgadmin4
     container_name: toolrental_pgadmin
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@example.com # Email do logowania do pgAdmina
-      PGADMIN_DEFAULT_PASSWORD: admin # Hasło do logowania do pgAdmina - ZMIEŃ JE!
+      PGADMIN_DEFAULT_EMAIL: admin@example.com # Twój email do pgAdmin
+      PGADMIN_DEFAULT_PASSWORD: admin # Twoje hasło do pgAdmin - PAMIĘTAJ ZMIENIĆ
     ports:
-      - "5050:80" # Mapujemy port 5050 na Twoim kompie na port 80 w kontenerze pgAdmin
+      - "5050:80"
     depends_on:
-      - db # pgAdmin powinien startować po bazie danych
+      - db
     volumes:
-      - pgadmin_data:/var/lib/pgadmin # Trwałe przechowywanie danych pgAdmina (np. zapisanych serwerów)
+      - pgadmin_data:/var/lib/pgadmin
     networks:
       - toolrental_network
 
@@ -68,4 +67,4 @@ networks:
 
 volumes:
   postgres_data:
-  pgadmin_data: # Dodajemy wolumen dla pgAdmina
+  pgadmin_data:
